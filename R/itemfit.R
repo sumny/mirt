@@ -42,7 +42,7 @@
 #' }
 #'
 #' Note that 'infit', 'S_X2', and 'Zh' cannot be computed when there are missing response data
-#' (i.e., will require multiple-imputation techniques).
+#' (i.e., will require multiple-imputation/row-removal techniques).
 #'
 #' @param which.items an integer vector indicating which items to test for fit.
 #'   Default tests all possible items
@@ -73,6 +73,8 @@
 #' @param empirical.CI a numeric value indicating the width of the empirical confidence interval
 #'   ranging between 0 and 1 (default of 0 plots not interval). For example, a 95% confidence
 #'   interval would be plotted when \code{empirical.CI = .95}. Only applicable to dichotomous items
+#' @param empirical.poly.collapse logical; collapse polytomous item categories to for expected scoring
+#'   functions for empirical plots? Default is \code{FALSE}
 #' @param method type of factor score estimation method. See \code{\link{fscores}} for more detail
 #' @param na.rm logical; remove rows with any missing values? This is required for methods such
 #'   as S-X2 because they require the "EAPsum" method from \code{\link{fscores}}
@@ -86,10 +88,10 @@
 #'   to approximate the scaling factor for X2* as well as the scaled degrees of freedom estimates
 #' @param ETrange rangone of integration nodes for Stone's X2* statistic
 #' @param ETpoints number of integration nodes to use for Stone's X2* statistic
-#' @param impute a number indicating how many imputations to perform (passed to
-#'   \code{\link{imputeMissing}}) when there are missing data present.
-#'   Will return a data.frame object with the mean estimates
-#'   of the stats and their imputed standard deviations
+# @param impute a number indicating how many imputations to perform (passed to
+#   \code{\link{imputeMissing}}) when there are missing data present.
+#   Will return a data.frame object with the mean estimates
+#   of the stats and their imputed standard deviations
 #' @param par.strip.text plotting argument passed to \code{\link{lattice}}
 #' @param par.settings plotting argument passed to \code{\link{lattice}}
 #' @param ... additional arguments to be passed to \code{fscores()} and \code{\link{lattice}}
@@ -162,9 +164,10 @@
 #'
 #' itemfit(x)
 #' itemfit(x, 'X2') # just X2
+#' itemfit(x, 'X2', method = 'ML') # X2 with maximum-likelihood estimates for traits
 #' itemfit(x, c('S_X2', 'X2')) #both S_X2 and X2
-#' itemfit(x, group.bins=15, empirical.plot = 1) #empirical item plot with 15 points
-#' itemfit(x, group.bins=15, empirical.plot = 21)
+#' itemfit(x, group.bins=15, empirical.plot = 1, method = 'ML') #empirical item plot with 15 points
+#' itemfit(x, group.bins=15, empirical.plot = 21, method = 'ML')
 #'
 #' # PV and X2* statistics (parametric bootstrap stats not run to save time)
 #' itemfit(x, 'PV_Q1')
@@ -174,16 +177,18 @@
 #' # itemfit(x, 'X2*') # Stone's 1993 statistic
 #' # itemfit(x, 'X2*_df') # Stone's 2000 scaled statistic with df estimate
 #'
-#' #empirical tables
+#' #empirical tables for X2 statistic
 #' itemfit(x, empirical.table=1)
 #' itemfit(x, empirical.table=21)
 #'
 #' #infit/outfit statistics. method='ML' agrees better with eRm package
 #' itemfit(raschfit, 'infit', method = 'ML') #infit and outfit stats
 #'
-#' #same as above, but inputting ML estimates instead
+#' #same as above, but inputting ML estimates instead (saves time for re-use)
 #' Theta <- fscores(raschfit, method = 'ML')
 #' itemfit(raschfit, 'infit', Theta=Theta)
+#' itemfit(raschfit, empirical.plot=1, Theta=Theta)
+#' itemfit(raschfit, empirical.table=1, Theta=Theta)
 #'
 #' # fit a new more flexible model for the mis-fitting item
 #' itemtype <- c(rep('2PL', 20), 'spline')
@@ -204,14 +209,15 @@
 #' itemfit(mod)
 #' itemfit(mod, 'X2') #pretty much useless given inflated Type I error rates
 #' itemfit(mod, empirical.plot = 1)
+#' itemfit(mod, empirical.plot = 1, empirical.poly.collapse=TRUE)
 #'
 #' # collapsed tables (see mincell.X2) for X2 and G2
 #' itemfit(mod, empirical.table = 1)
 #'
 #' mod2 <- mirt(dat, 1, 'Rasch')
-#' itemfit(mod2, 'infit')
+#' itemfit(mod2, 'infit', method = 'ML')
 #'
-#' #massive list of tables
+#' #massive list of tables for S-X2
 #' tables <- itemfit(mod, S_X2.tables = TRUE)
 #'
 #' #observed and expected total score patterns for item 1 (post collapsing)
@@ -219,20 +225,17 @@
 #' tables$E[[1]]
 #'
 #' # fit stats with missing data (run in parallel using all cores)
-#' data[sample(1:prod(dim(data)), 500)] <- NA
-#' raschfit <- mirt(data, 1, itemtype='Rasch')
+#' dat[sample(1:prod(dim(dat)), 100)] <- NA
+#' raschfit <- mirt(dat, 1, itemtype='Rasch')
 #'
-#' # use imputation if the proportion of missing data is relatively small
-#' mirtCluster() # run in parallel
-#' itemfit(raschfit, c('S_X2', 'infit'), impute = 10)
-#'
-#' #alternative route: use only valid data by removing rows with missing terms
+#' #use only valid data by removing rows with missing terms
 #' itemfit(raschfit, c('S_X2', 'infit'), na.rm = TRUE)
 #'
 #' # note that X2, G2, PV-Q1, and X2* do not require complete datasets
-#' itemfit(raschfit, c('X2', 'G2'))
-#' itemfit(raschfit, empirical.plot=1)
-#' itemfit(raschfit, empirical.table=1)
+#' thetas <- fscores(raschfit, method = 'ML') # save scores for faster computations
+#' itemfit(raschfit, c('X2', 'G2'), Theta=thetas)
+#' itemfit(raschfit, empirical.plot=1, Theta=thetas)
+#' itemfit(raschfit, empirical.table=1, Theta=thetas)
 #'
 #'}
 #'
@@ -242,20 +245,21 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
                     pv_draws = 30, boot = 1000, boot_dfapprox = 200,
                     ETrange = c(-2,2), ETpoints = 11,
                     empirical.plot = NULL, empirical.CI = .95, empirical.table = NULL,
-                    method = 'EAP', Theta = NULL, impute = 0,
+                    empirical.poly.collapse = FALSE, method = 'EAP', Theta = NULL, #impute = 0,
                     par.strip.text = list(cex = 0.7),
                     par.settings = list(strip.background = list(col = '#9ECAE1'),
                                         strip.border = list(col = "black")), ...){
 
-    fn <- function(ind, Theta, obj, vals, ...){
-        tmpobj <- obj
-        tmpdat <- imputeMissing(obj, Theta[[ind]], warn=FALSE)
-        tmpmod <- mirt(tmpdat, model=1, TOL=NA,
-                       technical=list(customK=obj@Data$K, message=FALSE, warn=FALSE))
-        tmpobj@Data <- tmpmod@Data
-        whc <- 1L:length(Theta)
-        return(itemfit(tmpobj, Theta=Theta[[sample(whc[-ind], 1L)]], ...))
-    }
+    impute <- 0
+    # fn <- function(ind, Theta, obj, vals, ...){
+    #     tmpobj <- obj
+    #     tmpdat <- imputeMissing(obj, Theta[[ind]], warn=FALSE)
+    #     tmpmod <- mirt(tmpdat, model=1, TOL=NA,
+    #                    technical=list(customK=obj@Data$K, message=FALSE, warn=FALSE))
+    #     tmpobj@Data <- tmpmod@Data
+    #     whc <- 1L:length(Theta)
+    #     return(itemfit(tmpobj, Theta=Theta[[sample(whc[-ind], 1L)]], ...))
+    # }
     PV_itemfit <- function(mod, which.items = 1:extract.mirt(mod, 'nitems'),
                            draws = 100, ...){
         pv <- fscores(mod, plausible.draws = draws, ...)
@@ -279,12 +283,14 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
                         itemtype, boot = 1000, draws = 30, verbose = FALSE, ...){
         pb_fun <- function(ind, mod, N, sv, which.items, draws, itemtype, ...){
             count <- 0L
+            K <- extract.mirt(mod, 'K')
             while(TRUE){
                 count <- count + 1L
                 if(count == 20)
                     stop('20 consecutive parametric bootstraps failed for PV_Q1*', call.=FALSE)
                 dat <- simdata(model=mod, N=N)
                 dat[is_NA] <- NA
+                if(!all(apply(dat, 2, function(x) length(na.omit(unique(x)))) == K)) next
                 mod2 <- mirt(dat, model, itemtype=itemtype,
                              verbose=FALSE, pars=sv, technical=list(warn=FALSE))
                 if(!extract.mirt(mod2, 'converged')) next
@@ -333,12 +339,14 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
         pb_fun <- function(ind, is_NA, mod, N, model, itemtype, sv, which.items, ETrange,
                            ETpoints, ...){
             count <- 0L
+            K <- extract.mirt(mod, 'K')
             while(TRUE){
                 count <- count + 1L
                 if(count == 20)
                     stop('20 consecutive parametric bootstraps failed for X2*', call.=FALSE)
                 dat <- simdata(model=mod, N=N)
                 dat[is_NA] <- NA
+                if(!all(apply(dat, 2, function(x) length(na.omit(unique(x)))) == K)) next
                 mod2 <- mirt(dat, model, itemtype=itemtype, verbose=FALSE, pars=sv,
                              technical=list(warn=FALSE))
                 if(!extract.mirt(mod2, 'converged')) next
@@ -412,9 +420,10 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
     }
     J <- ncol(x@Data$data)
     if(na.rm) x <- removeMissing(x)
+    if(na.rm) message('Sample size after row-wise response data removal: ', nrow(extract.mirt(x, 'data')))
     if(any(is.na(x@Data$data)) && (Zh || S_X2 || infit) && impute == 0)
         stop('Only X2, G2, PV_Q1, PV_Q1*, X2*, and X2*_df can be computed with missing data.
-             Consider using imputed datasets or passing na.rm=TRUE', call.=FALSE)
+             Pass na.rm=TRUE to remove missing data row-wise', call.=FALSE)
 
     if(is(x, 'MultipleGroupClass') || is(x, 'DiscreteClass')){
         discrete <- is(x, 'DiscreteClass')
@@ -453,41 +462,39 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
         discrete <- TRUE
         pis <- extract.mirt(x, 'pis')
     }
-    if(impute != 0 && !is(x, 'MultipleGroupClass')){
-        if(impute == 0)
-            stop('Fit statistics cannot be computed when there are missing data. Pass a suitable
-                 impute argument to compute statistics following multiple data
-                 imputations', call.=FALSE)
-        if(sum(is.na(x@Data$data)) / length(x@Data$data) > .10)
-            warning('Imputations for large amounts of missing data may be overly conservative. Use with caution', call.=FALSE)
-        stopifnot(impute > 1L)
-        if(is.null(Theta))
-            Theta <- fscores(x, plausible.draws = impute, method = ifelse(method == 'MAP', 'MAP', 'EAP'), ...)
-        collect <- vector('list', impute)
-        vals <- mod2values(x)
-        vals$est <- FALSE
-        collect <- myLapply(1L:impute, fn, Theta=Theta, obj=x, vals=vals, fit_stats=fit_stats,
-                            group.size=group.size, group.bins=group.bins,
-                            mincell=mincell, mincell.X2=mincell.X2,
-                            S_X2.tables=S_X2.tables, empirical.plot=empirical.plot,
-                            empirical.CI=empirical.CI, empirical.table=empirical.table,
-                            method=method, impute=0, discrete=discrete, ...)
-        ave <- SD <- collect[[1L]]
-        pick1 <- 1:nrow(ave)
-        pick2 <- sapply(ave, is.numeric)
-        ave[pick1, pick2] <- SD[pick1, pick2] <- 0
-        for(i in seq_len(impute))
-            ave[pick1, pick2] <- ave[pick1, pick2] + collect[[i]][pick1, pick2]
-        ave[pick1, pick2] <- ave[pick1, pick2]/impute
-        for(i in seq_len(impute))
-            SD[pick1, pick2] <- SD[pick1, pick2] + (ave[pick1, pick2] - collect[[i]][pick1, pick2])^2
-        SD[pick1, pick2] <- sqrt(SD[pick1, pick2]/impute)
-        SD$item <- paste0('SD_', SD$item)
-        SD <- rbind(NA, SD)
-        ret <- rbind(ave, SD)
-        class(ret) <- c('mirt_df', 'data.frame')
-        return(ret)
-    }
+    # if(impute != 0 && !is(x, 'MultipleGroupClass')){
+    #     if(impute == 0)
+    #         stop('Fit statistics cannot be computed when there are missing data. Pass na.rm=TRUE to remove cases row-wise', call.=FALSE)
+    #     if(sum(is.na(x@Data$data)) / length(x@Data$data) > .10)
+    #         warning('Imputations for large amounts of missing data may be overly conservative. Use with caution', call.=FALSE)
+    #     stopifnot(impute > 1L)
+    #     if(is.null(Theta))
+    #         Theta <- fscores(x, plausible.draws = impute, method = ifelse(method == 'MAP', 'MAP', 'EAP'), ...)
+    #     collect <- vector('list', impute)
+    #     vals <- mod2values(x)
+    #     vals$est <- FALSE
+    #     collect <- myLapply(1L:impute, fn, Theta=Theta, obj=x, vals=vals, fit_stats=fit_stats,
+    #                         group.size=group.size, group.bins=group.bins,
+    #                         mincell=mincell, mincell.X2=mincell.X2,
+    #                         S_X2.tables=S_X2.tables, empirical.plot=empirical.plot,
+    #                         empirical.CI=empirical.CI, empirical.table=empirical.table,
+    #                         method=method, impute=0, discrete=discrete, ...)
+    #     ave <- SD <- collect[[1L]]
+    #     pick1 <- 1:nrow(ave)
+    #     pick2 <- sapply(ave, is.numeric)
+    #     ave[pick1, pick2] <- SD[pick1, pick2] <- 0
+    #     for(i in seq_len(impute))
+    #         ave[pick1, pick2] <- ave[pick1, pick2] + collect[[i]][pick1, pick2]
+    #     ave[pick1, pick2] <- ave[pick1, pick2]/impute
+    #     for(i in seq_len(impute))
+    #         SD[pick1, pick2] <- SD[pick1, pick2] + (ave[pick1, pick2] - collect[[i]][pick1, pick2])^2
+    #     SD[pick1, pick2] <- sqrt(SD[pick1, pick2]/impute)
+    #     SD$item <- paste0('SD_', SD$item)
+    #     SD <- rbind(NA, SD)
+    #     ret <- rbind(ave, SD)
+    #     class(ret) <- c('mirt_df', 'data.frame')
+    #     return(ret)
+    # }
     if(S_X2.tables || discrete) Zh <- X2 <- FALSE
     ret <- data.frame(item=colnames(x@Data$data)[which.items])
     itemloc <- x@Model$itemloc
@@ -677,6 +684,22 @@ itemfit <- function(x, fit_stats = 'S_X2', which.items = 1:extract.mirt(x, 'nite
             empirical.plot_P <- ProbTrace(pars[[empirical.plot]], ThetaFull)
             empirical.plot_points <- empirical.plot_points[,-2]
             colnames(empirical.plot_points) <- c('theta', paste0('p.', 1:K))
+            if(empirical.poly.collapse){
+                score <- 1L:ncol(empirical.plot_P) - 1L
+                plt1 <- data.frame(ThetaFull, colSums(t(empirical.plot_P) * score))
+                plt2 <- data.frame(empirical.plot_points[,1], colSums(t(empirical.plot_points[,-1]) * score))
+                colnames(plt1) <- colnames(plt2) <- c('Theta', "E")
+                return(xyplot(E~Theta, plt1,
+                              main = paste('Empirical plot for item', empirical.plot),
+                              xlab = expression(theta), ylab=expression(E(theta)),
+                              panel = function(x, y, subscripts, ...){
+                                  panel.xyplot(x=x, y=y, type='l',
+                                               subscripts=subscripts, ...)
+                                  panel.points(cbind(plt2$Theta[subscripts], plt2$E[subscripts]),
+                                               col='black', ...)
+                              },
+                              par.strip.text=par.strip.text, par.settings=par.settings, ...))
+            }
             while(nrow(empirical.plot_points) < nrow(empirical.plot_P))
                 empirical.plot_points <- rbind(empirical.plot_points,
                                                rep(NA, length(empirical.plot_points[1,])))

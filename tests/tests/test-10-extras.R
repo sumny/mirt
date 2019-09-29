@@ -51,19 +51,7 @@ test_that('extras', {
     PLCI <- PLCI.mirt(mirt(Science, 1, verbose=FALSE), parnum=c(1,2))
     expect_equal(c(PLCI$lower_2.5, PLCI$upper_97.5), c(0.7008617, 4.0112247, 1.4530232, 5.9667792),
                   tolerance=1e-3)
-    DIFF <- suppressMessages(DIF(model1a, which.par='d', items2test = c(1,3)))
-    expect_is(DIFF, 'data.frame')
-    expect_equal(DIFF[2,'AIC'], -3.414, tolerance = 1e-3)
-    DIFF2 <- suppressMessages(DIF(model2, which.par=c('a1', 'd'), items2test = c(1,3), scheme='drop'))
-    expect_is(DIFF2, 'data.frame')
-    expect_equal(DIFF2[1L, 'X2'], 18.88, tolerance = 1e-3)
 
-    WALD <- suppressMessages(DIF(model1a, which.par='d', items2test = 1:3, Wald=TRUE))
-    expect_is(WALD, 'data.frame')
-    expect_equal(WALD$W[1], 1.532718, tolerance = 1e-3)
-    expect_equal(WALD$p[1], 0.2157049, tolerance = 1e-3)
-    WALD2 <- suppressMessages(DIF(model1a, which.par=c('a1', 'd'), Wald=TRUE, p.adjust = 'fdr'))
-    expect_equal(as.numeric(WALD2$adj_pvals), c(0.02473307,0.01580279,0.1261503,0.4299811,0.4672727,0.4565218,0.05971613,0.5671398,0.4299811,0.4565218), tolerance = 1e-3)
     extr.2 <- extract.item(mod1, 2)
     Theta <- matrix(seq(-6,6, length.out=200))
     expected <- expected.item(extr.2, Theta)
@@ -96,9 +84,9 @@ test_that('extras', {
     pick <- c('a1', 'a2', 'd1', 'd2', 'd3')
     expect_true(sum(abs(s1[,pick] - s2[,pick])) < 1e-8)
     mod3 <- mirt(dat, 2, 'gpcm', gpcm_mats = mats, TOL = 1e-2, verbose=FALSE)
-    expect_equal(extract.mirt(mod3, 'logLik'), -3708.216, tolerance = 1e-4)
+    expect_equal(extract.mirt(mod3, 'logLik'), -3721.461, tolerance = 1e-4)
     cfs <- as.vector(coef(mod3, simplify=TRUE)$items)
-    expect_equal(cfs, c(-1.23177,-2.76946,-1.54897,-1.34947,-0.41973,-0.45958,-0.71595,-0.58334,-0.29564,4.58694,0.36752,-0.31281,0.4241,-2.90723,-0.16516,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,0,0,0,0,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,3.69493,7.87579,3.59178,3.00087,2.60806,2.7068,2.83078,2.07429,6.50601,10.34317,5.36289,4.0315,5.42778,5.57857,4.69492,3.43515,4.9848,4.17678,3.89073,2.40695,5.74,5.87555,5.00542,3.86719,NA,NA,NA,NA,4,4,4,4,NA,NA,NA,NA,5,5,5,5,NA,NA,NA,NA,0,0,0,0,NA,NA,NA,NA,0,0,0,0,NA,NA,NA,NA,5.43095,5.52149,4.54781,3.38757,NA,NA,NA,NA,3.98583,3.27075,2.90466,1.19029), tolerance=1e-4)
+    expect_equal(cfs, c(0.7835446,2.088519,4.489773,0.6727285,0.2357904,0.3148114,1.736133,0.3861383,0.07062774,6.563708,1.01623,0.05366885,0.2764068,-5.030398,-0.1089204,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,0,0,0,0,3,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,2.737057,9.954572,8.696347,2.051471,1.746521,1.493303,4.871186,2.184036,5.174404,13.00528,12.46809,2.830379,4.335373,6.261805,7.718796,3.259992,3.88189,5.255669,9.140148,1.683119,4.413986,6.18042,8.669859,3.579751,NA,NA,NA,NA,4,4,4,4,NA,NA,NA,NA,5,5,5,5,NA,NA,NA,NA,0,0,0,0,NA,NA,NA,NA,0,0,0,0,NA,NA,NA,NA,4.178023,5.776866,7.750279,3.300487,NA,NA,NA,NA,3.043197,4.313529,5.190609,1.550788), tolerance=1e-4)
 
 })
 

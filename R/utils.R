@@ -64,6 +64,24 @@ prodterms <- function(theta0, prodlist)
     ret
 }
 
+gain_fun <- function(gain, t) (gain[1L] / t)^gain[2L]
+
+update_cand.var <- function(PAs, CTVs, target = .5){
+    pick <- max(which(!is.na(PAs)))
+    if(PAs[pick] < .4 & PAs[pick] > .3) return(CTVs[pick])
+    if(PAs[pick] < .01) return(min(CTVs, na.rm = TRUE)/10)
+    if(PAs[pick] > .99) return(max(CTVs, na.rm = TRUE)*5)
+    if(length(unique(CTVs)) < 4L){
+        return(CTVs[pick] * ifelse(PAs[pick] > .5, 1.1, .8))
+    }
+    df <- data.frame(PAs, CTVs)
+    mod <- lm(plogis(PAs) ~ CTVs, data=df)
+    fn <- function(x) (target - qlogis(predict(mod, data.frame(CTVs=x))))^2
+    root <- nlm(f = fn, p = CTVs[pick])$estimate
+    if(root < 0) root <- min(CTVs, na.rm = TRUE) / 2
+    return(root)
+}
+
 # MH sampler for theta values
 draw.thetas <- function(theta0, pars, fulldata, itemloc, cand.t.var, prior.t.var,
                         prior.mu, prodlist, OffTerm, CUSTOM.IND)
@@ -216,7 +234,7 @@ gamma.cor <- function(x)
 {
 	concordant <- function(x){
 			mat.lr <- function(r, c, r.x, c.x){
-				lr <- x[(r.x > r) & (c.x > c)]
+				lr <- as.numeric(x[(r.x > r) & (c.x > c)])
 				sum(lr)
 			}
 		r.x <- row(x)
@@ -225,7 +243,7 @@ gamma.cor <- function(x)
 	}
 	discordant <- function(x){
 		mat.ll <- function(r, c, r.x, c.x){
-			ll <- x[(r.x > r) & (c.x < c)]
+			ll <- as.numeric(x[(r.x > r) & (c.x < c)])
 			sum(ll)
 		}
 		r.x <- row(x)
@@ -532,6 +550,7 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                                     } else newx <- c(newx, x[i])
                                 }
                                 x <- c(newx, x[length(x)])
+                                if(x[1L] == 'GROUP') x[1L] <- J + 1L
                                 x
                             })
                 for(i in seq_len(length(esplit))){
@@ -582,6 +601,7 @@ UpdateConstrain <- function(pars, constrain, invariance, nfact, nLambdas, J, ngr
                         } else newx <- c(newx, x[i])
                     }
                     x <- c(newx, x[length(x)])
+                    if(x[1L] == 'GROUP') x[1L] <- J + 1L
                     x
                 })
                 for(i in seq_len(length(esplit))){
@@ -1089,8 +1109,11 @@ UpdatePrepList <- function(PrepList, pars, random, lr.random, lrPars = list(), M
     pars$value[pars$name %in% c('g', 'u')] <- logit(pars$value[pars$name %in% c('g', 'u')])
     pars$lbound[pars$name %in% c('g', 'u')] <- logit(pars$lbound[pars$name %in% c('g', 'u')])
     pars$ubound[pars$name %in% c('g', 'u')] <- logit(pars$ubound[pars$name %in% c('g', 'u')])
-    if(PrepList[[1L]]$nfact > 1L)
-        PrepList[[1L]]$exploratory <- all(pars$est[pars$name %in% paste0('a', seq_len(PrepList[[1L]]$nfact))])
+    if(PrepList[[1L]]$nfact > 1L){
+        mat <- matrix(pars$est[pars$name %in% paste0('a', seq_len(PrepList[[1L]]$nfact))],
+                      nrow = length(PrepList[[1L]]$K), ncol = PrepList[[1L]]$nfact, byrow=TRUE)
+        PrepList[[1L]]$exploratory <- all(sort(colSums(!mat)) == seq(0L, PrepList[[1L]]$nfact - 1L))
+    }
     ind <- 1L
     for(g in seq_len(length(PrepList))){
         for(i in seq_len(length(PrepList[[g]]$pars))){
@@ -2249,6 +2272,10 @@ removeMissing <- function(obj){
     dat <- extract.mirt(obj, 'data')
     obj@Data$data <- na.omit(dat)
     pick <- attr(obj@Data$data, 'na.action')
+    if(is.null(pick)){
+        message('Data does not contain missing values. Continuing normally')
+        return(obj)
+    }
     obj@Data$group <- obj@Data$group[-pick]
     ind1 <- 0L
     for(g in seq_len(length(obj@Data$groupNames))){
